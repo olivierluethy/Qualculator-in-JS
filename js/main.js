@@ -22,7 +22,7 @@ const MODES = [
   { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false },
   { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false },
   { id: 'graph', label: 'Graph', mount: mountGraph, needsDisplay: false },
-  { id: 'geometry', label: 'Geometrie', mount: mountGeometry, needsDisplay: false },
+  { id: 'geometry', label: 'Geometry', mount: mountGeometry, needsDisplay: false },
 ];
 
 let activeMode = 'standard';
