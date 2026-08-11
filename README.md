@@ -35,6 +35,7 @@ shared across every mode.
 | **Physics** | Newton's second law **F = m · a**. Fill any two of F (N), m (kg), a (m/s²); leave one blank to solve for it. |
 | **Vectors** | Interactive SVG coordinate plane. Plot two vectors by typing components or dragging the arrow tips. Compute add/subtract, scalar multiply, magnitude, dot product, angle between, 2D cross product/determinant, and the **resultant force** (vector sum with magnitude & direction). |
 | **Graph** | GeoGebra-style graphing calculator on a pannable/zoomable canvas. Plot functions `y = f(x)`, points `(x, y)`, vertical lines `x = c`, **vector fields** `(P, Q)`, and **slope fields** `y' = f(x, y)`. Each object gets its own color with show/hide and delete; drag to pan, scroll to zoom, or click the plane to drop points. |
+| **Geometrie** | Circle-geometry calculator (German labels): Kreis (Radius/Durchmesser/Umfang/Fläche), Kreisbogen · Kreissektor · Kreissegment · Sehne, Kreisring, Zentri-/Umfangswinkel, Passante/Tangente/Sekante, Tangentenlänge, Winkelhalbierende, and Kreiszahl π. Pick a calculator from the dropdown; inputs accept expressions (e.g. `2*pi`). Results go to history. |
 
 ## Key features
 
@@ -68,6 +69,7 @@ js/
     format.js         # number formatting (float-noise cleanup, exponential, errors)
     state.js          # shared expression state + live-preview engine
     history.js        # localStorage-backed history store
+    icons.js          # inline SVG icon per mode
     dom.js            # small element/button helpers
   modes/
     standard.js       # standard keypad
@@ -76,6 +78,7 @@ js/
     physics.js        # F = m·a solver
     vectors.js        # interactive SVG vector plane
     graph.js          # canvas graphing calculator (functions, points, fields)
+    geometry.js       # circle-geometry calculators (Kreis, Sektor, Sehne, ...)
 docs/superpowers/specs # design document
 ```
 

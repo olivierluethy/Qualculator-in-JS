@@ -5,12 +5,14 @@
 import * as state from './core/state.js';
 import * as history from './core/history.js';
 import { el } from './core/dom.js';
+import { iconSpan } from './core/icons.js';
 import { mountStandard } from './modes/standard.js';
 import { mountScientific } from './modes/scientific.js';
 import { mountFormula } from './modes/formula.js';
 import { mountPhysics } from './modes/physics.js';
 import { mountVectors } from './modes/vectors.js';
 import { mountGraph } from './modes/graph.js';
+import { mountGeometry } from './modes/geometry.js';
 
 // Mode registry. needsDisplay = uses the shared expression display at the top.
 const MODES = [
@@ -20,6 +22,7 @@ const MODES = [
   { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false },
   { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false },
   { id: 'graph', label: 'Graph', mount: mountGraph, needsDisplay: false },
+  { id: 'geometry', label: 'Geometrie', mount: mountGeometry, needsDisplay: false },
 ];
 
 let activeMode = 'standard';
@@ -36,10 +39,9 @@ function boot() {
   MODES.forEach((mode, idx) => {
     const tab = el('button', {
       className: tabClass(idx === 0),
-      text: mode.label,
       attrs: { type: 'button', 'data-mode': mode.id, role: 'tab' },
       onClick: () => switchMode(mode.id),
-    });
+    }, [iconSpan(mode.id), el('span', { text: mode.label })]);
     tabsEl.appendChild(tab);
 
     const panel = el('div', { className: idx === 0 ? '' : 'hidden' });
@@ -198,7 +200,7 @@ function ensureCalcMode() {
 // ---- tailwind class helpers ----
 function tabClass(active) {
   return (
-    'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ' +
+    'inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ' +
     (active
       ? 'bg-indigo-600 text-white'
       : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
