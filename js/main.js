@@ -1,213 +1,190 @@
-/* First number for input field */
-let numberInInput = 0;
-/* Second number for input field */
-let secondNumber = 0;
-/* To store the operation that the wants */
-let operation = "";
-let previousOperation = "";
-/* To calculate the result */
-let total = 0;
-/* How often the user has clicked on a button */
-let buttonCount = 0;
+// main.js — application bootstrap.
+// Wires the shared display + live preview, the mode tabs, the history drawer,
+// and global keyboard support. Each calculator mode is mounted into its panel.
 
-/* To show the button klicks in the input field */
-function display(number) {
-    console.log(operation);
-    if (buttonCount == 0 && operation == "" && numberInInput == 0 && secondNumber == 0 && total == 0) {
-        document.getElementById("input").value = number;
-        numberInInput = document.getElementById("input").value;
-        buttonCount++;
-        console.log("Operation 1")
-    } else if (number == '.' && secondNumber == 0 && total == 0 && buttonCount != 0) {
-        document.getElementById("input").value += number;
-        numberInInput += number;
-        console.log("Operation 2")
-    } else if (buttonCount != 0 && operation == "" && numberInInput != 0 && secondNumber == 0 && total == 0) {
-        document.getElementById("input").value += number;
-        numberInInput += number;
-        console.log("Operation 3")
-    } else if (buttonCount != 0 && operation != "" && secondNumber == 0 && total == 0 && numberInInput != 0) {
-        document.getElementById("input").value = number;
-        secondNumber = document.getElementById("input").value;
-        console.log("Operation 4")
-    } else if (buttonCount != 0 && operation != "" && secondNumber != 0 && total == 0) {
-        document.getElementById("input").value += number;
-        secondNumber += number;
-        console.log("Operation 5")
-    } else if (total != 0 && operation != "") {
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = number;
-        numberInInput = total;
-        total = 0;
-        secondNumber = number;
-        console.log("Operation 6");
-    } else if (total != 0 && operation == "") {
-        numberInInput = 0;
-        secondNumber = 0;
-        total = 0;
-        operation = "";
-        previousOperation = "";
-        buttonCount = 0;
-        document.getElementById("input").value = number;
-        numberInInput = document.getElementById("input").value;
-        console.log("Operation 6")
-        buttonCount++;
+import * as state from './core/state.js';
+import * as history from './core/history.js';
+import { el } from './core/dom.js';
+import { mountStandard } from './modes/standard.js';
+import { mountScientific } from './modes/scientific.js';
+import { mountFormula } from './modes/formula.js';
+import { mountPhysics } from './modes/physics.js';
+import { mountVectors } from './modes/vectors.js';
+
+// Mode registry. needsDisplay = uses the shared expression display at the top.
+const MODES = [
+  { id: 'standard', label: 'Standard', mount: mountStandard, needsDisplay: true },
+  { id: 'scientific', label: 'Scientific', mount: mountScientific, needsDisplay: true },
+  { id: 'formula', label: 'Formula', mount: mountFormula, needsDisplay: true },
+  { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false },
+  { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false },
+];
+
+let activeMode = 'standard';
+
+const $ = (id) => document.getElementById(id);
+
+function boot() {
+  const tabsEl = $('tabs');
+  const panelsEl = $('panels');
+  const displayEl = $('display');
+
+  // --- build tabs + panels ---
+  const panels = {};
+  MODES.forEach((mode, idx) => {
+    const tab = el('button', {
+      className: tabClass(idx === 0),
+      text: mode.label,
+      attrs: { type: 'button', 'data-mode': mode.id, role: 'tab' },
+      onClick: () => switchMode(mode.id),
+    });
+    tabsEl.appendChild(tab);
+
+    const panel = el('div', { className: idx === 0 ? '' : 'hidden' });
+    mode.mount(panel);           // mount the mode's UI once
+    panels[mode.id] = panel;
+    panelsEl.appendChild(panel);
+  });
+
+  function switchMode(id) {
+    activeMode = id;
+    MODES.forEach((mode, idx) => {
+      panels[mode.id].classList.toggle('hidden', mode.id !== id);
+      tabsEl.children[idx].className = tabClass(mode.id === id);
+    });
+    const mode = MODES.find((m) => m.id === id);
+    displayEl.classList.toggle('hidden', !mode.needsDisplay);
+  }
+
+  // --- shared display: expression + live preview + error ---
+  const exprLine = $('expr');
+  const previewLine = $('preview');
+  const angleTag = $('angle');
+
+  function renderDisplay() {
+    const expr = state.getExpression();
+    exprLine.textContent = expr === '' ? '0' : expr;
+    // keep the newest (right-most) characters in view
+    exprLine.scrollLeft = exprLine.scrollWidth;
+
+    const err = state.getError();
+    if (err) {
+      previewLine.textContent = err;
+      previewLine.className = previewClass(true);
+    } else {
+      const preview = state.getPreview();
+      previewLine.textContent = preview ? `= ${preview}` : '';
+      previewLine.className = previewClass(false);
     }
+    angleTag.textContent = state.getAngleMode().toUpperCase();
+  }
+  state.subscribe(renderDisplay);
+  renderDisplay();
+
+  // --- history drawer ---
+  setupHistory();
+
+  // --- keyboard support (only for the button-driven calc modes) ---
+  window.addEventListener('keydown', onKey);
+
+  // expose switchMode for history reuse
+  boot.switchMode = switchMode;
 }
 
-/* To delete the value in the input field */
-function clearNum() {
-    numberInInput = 0;
-    secondNumber = 0;
-    total = 0;
-    operation = "";
-    previousOperation = "";
-    buttonCount = 0;
-    document.getElementById("input").value = "0";
+function onKey(e) {
+  // Let text inputs (formula, physics, vectors) handle their own typing.
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (activeMode !== 'standard' && activeMode !== 'scientific') return;
+
+  const k = e.key;
+  if (k >= '0' && k <= '9') { state.append(k, 'digit'); e.preventDefault(); }
+  else if (k === '.') { state.append('.', 'dot'); e.preventDefault(); }
+  else if (['+', '-', '*', '/', '%', '^'].includes(k)) { state.append(k, 'op'); e.preventDefault(); }
+  else if (k === '(' || k === ')') { state.append(k, 'raw'); e.preventDefault(); }
+  else if (k === 'Enter' || k === '=') { state.evaluateNow(); e.preventDefault(); }
+  else if (k === 'Backspace') { state.backspace(); e.preventDefault(); }
+  else if (k === 'Escape') { state.clear(); e.preventDefault(); }
 }
 
-/* If plus, minus, divide, multiply or modulo is selected */
-function display_add(add) {
-    document.getElementById("input").value = "";
-    document.getElementById("input").value = add;
-    operation = "addition";
+// ---- history drawer + list ----
+function setupHistory() {
+  const drawer = $('history-drawer');
+  const overlay = $('history-overlay');
+  const listEl = $('history-list');
+  const emptyEl = $('history-empty');
+
+  const open = () => { drawer.classList.remove('translate-x-full'); overlay.classList.remove('hidden'); };
+  const close = () => { drawer.classList.add('translate-x-full'); overlay.classList.add('hidden'); };
+
+  $('history-toggle').addEventListener('click', open);
+  $('history-close').addEventListener('click', close);
+  overlay.addEventListener('click', close);
+  $('history-clear').addEventListener('click', () => history.clearAll());
+
+  function render() {
+    const entries = history.all();
+    listEl.innerHTML = '';
+    emptyEl.classList.toggle('hidden', entries.length > 0);
+
+    entries.forEach((entry) => {
+      const card = el('div', { className: 'group rounded-xl bg-slate-800/60 border border-slate-700 p-3 flex items-start gap-2' });
+
+      const main = el('div', { className: 'flex-1 min-w-0' });
+      // click the expression -> reload the whole expression to continue editing
+      const exprBtn = el('button', {
+        className: 'block w-full text-left text-xs text-slate-400 truncate hover:text-slate-200',
+        text: entry.expression,
+        attrs: { type: 'button', title: 'Load this expression' },
+        onClick: () => { state.setExpression(entry.expression); ensureCalcMode(); },
+      });
+      // click the result -> insert the value and keep calculating
+      const resBtn = el('button', {
+        className: 'block w-full text-left text-lg font-semibold text-indigo-300 truncate hover:text-indigo-200',
+        text: entry.result,
+        attrs: { type: 'button', title: 'Insert this result' },
+        onClick: () => { state.insertValue(entry.result); ensureCalcMode(); },
+      });
+      main.appendChild(exprBtn);
+      main.appendChild(resBtn);
+
+      const del = el('button', {
+        className: 'shrink-0 text-slate-500 hover:text-rose-400 transition-colors px-1',
+        html: '&times;',
+        attrs: { type: 'button', 'aria-label': 'Delete entry' },
+        onClick: () => history.remove(entry.id),
+      });
+
+      card.appendChild(main);
+      card.appendChild(del);
+      listEl.appendChild(card);
+    });
+  }
+  history.subscribe(render);
+  render();
 }
 
-function display_sub(sub) {
-    document.getElementById("input").value = "";
-    document.getElementById("input").value = sub;
-    operation = "subtraction";
+// Reusing history from Physics/Vectors should jump back to a calc mode so the
+// value lands in the visible expression display.
+function ensureCalcMode() {
+  if (activeMode !== 'standard' && activeMode !== 'scientific' && activeMode !== 'formula') {
+    if (boot.switchMode) boot.switchMode('standard');
+  }
 }
 
-function display_divide(divide) {
-    document.getElementById("input").value = "";
-    document.getElementById("input").value = divide;
-    operation = "divide";
+// ---- tailwind class helpers ----
+function tabClass(active) {
+  return (
+    'px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ' +
+    (active
+      ? 'bg-indigo-600 text-white'
+      : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+  );
+}
+function previewClass(isError) {
+  return (
+    'text-right text-lg h-7 overflow-hidden ' + (isError ? 'text-rose-400' : 'text-slate-400')
+  );
 }
 
-function display_multi(multi) {
-    document.getElementById("input").value = "";
-    document.getElementById("input").value = multi;
-    operation = "multiply";
-}
-
-function display_modulo(modulo) {
-    document.getElementById("input").value = "";
-    document.getElementById("input").value = modulo;
-    operation = "modulo";
-}
-
-/* To calculate the result */
-function solve() {
-    if (operation == "addition" && total == 0) {
-        numberInInput = parseFloat(numberInInput);
-        secondNumber = parseFloat(secondNumber);
-        console.log(numberInInput, secondNumber);
-        total = numberInInput + secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "addition" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (previousOperation == "addition" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (previousOperation == "substraction" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "subtraction" && total == 0) {
-        total = numberInInput - secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "subtraction" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total -= secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "divide" && total == 0) {
-        total = numberInInput / secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "divide" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total /= secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-        operation = "";
-    } else if (previousOperation == "divide" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "multiply" && total == 0) {
-        total = numberInInput * secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "multiply" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total *= secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (previousOperation == "multiply" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "modulo" && total == 0) {
-        total = numberInInput % secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (operation == "modulo" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total %= secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    } else if (previousOperation == "modulo" && total != 0) {
-        secondNumber = parseInt(secondNumber);
-        total += secondNumber;
-        document.getElementById("input").value = "";
-        document.getElementById("input").value = total;
-        enterAnimation();
-    }
-    if (!previousOperation) {
-        previousOperation = operation;
-    }
-    operation = "";
-}
-/* When user wants to numbers together, a green animation appears in the input field */
-function enterAnimation() {
-    document.querySelector("input").style = "background-color: #00ff44; transform: 0.5s ease";
-    setTimeout(function() { document.querySelector("input").style = "background-color: none; transform: 0.5s ease"; }, 400);
-}
-
-/* To delete a digit */
-function clearLastNumber() {
-    let text = document.getElementById("input").value;
-    // https://stackoverflow.com/questions/952924/how-do-i-chop-slice-trim-off-last-character-in-string-using-javascript
-    text = text.substring(0, text.length - 1);
-    console.log(text);
-    document.getElementById("input").value = text;
-    numberInInput = text;
-    secondNumber = 0;
-    total = 0;
-}
+boot();
