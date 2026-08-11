@@ -117,6 +117,12 @@ function setupHistory() {
   const open = () => { drawer.classList.remove('translate-x-full'); overlay.classList.remove('hidden'); };
   const close = () => { drawer.classList.add('translate-x-full'); overlay.classList.add('hidden'); };
 
+  // Brief highlight to confirm a history entry was reused.
+  const flash = (node) => {
+    node.classList.add('ring-2', 'ring-indigo-400');
+    setTimeout(() => node.classList.remove('ring-2', 'ring-indigo-400'), 300);
+  };
+
   $('history-toggle').addEventListener('click', open);
   $('history-close').addEventListener('click', close);
   overlay.addEventListener('click', close);
@@ -128,34 +134,49 @@ function setupHistory() {
     emptyEl.classList.toggle('hidden', entries.length > 0);
 
     entries.forEach((entry) => {
-      const card = el('div', { className: 'group rounded-xl bg-slate-800/60 border border-slate-700 p-3 flex items-start gap-2' });
+      const card = el('div', {
+        className: 'group relative rounded-xl bg-slate-800/60 border border-slate-700 ' +
+          'hover:border-indigo-500/60 transition-colors p-3 pr-7',
+      });
 
-      const main = el('div', { className: 'flex-1 min-w-0' });
-      // click the expression -> reload the whole expression to continue editing
+      // Expression row -> reload the whole expression to continue editing.
+      // A ↻ icon signals it's re-loadable.
       const exprBtn = el('button', {
-        className: 'block w-full text-left text-xs text-slate-400 truncate hover:text-slate-200',
-        text: entry.expression,
-        attrs: { type: 'button', title: 'Load this expression' },
-        onClick: () => { state.setExpression(entry.expression); ensureCalcMode(); },
-      });
-      // click the result -> insert the value and keep calculating
+        className: 'flex items-center gap-1.5 w-full text-left text-xs text-slate-400 ' +
+          'hover:text-slate-200 transition-colors',
+        attrs: { type: 'button', title: 'Load this expression to edit' },
+        onClick: () => { state.setExpression(entry.expression); ensureCalcMode(); flash(card); close(); },
+      }, [
+        el('span', { className: 'shrink-0 text-slate-500 group-hover:text-indigo-300', html: '&#8635;' }), // ↻
+        el('span', { className: 'truncate', text: entry.expression }),
+      ]);
+
+      // Result row -> insert the value and keep calculating. The always-visible
+      // "reuse" chip makes it obvious the number is tappable (no hover on mobile).
       const resBtn = el('button', {
-        className: 'block w-full text-left text-lg font-semibold text-indigo-300 truncate hover:text-indigo-200',
-        text: entry.result,
-        attrs: { type: 'button', title: 'Insert this result' },
-        onClick: () => { state.insertValue(entry.result); ensureCalcMode(); },
-      });
-      main.appendChild(exprBtn);
-      main.appendChild(resBtn);
+        className: 'mt-1 -mx-1 flex items-center justify-between gap-2 w-full text-left ' +
+          'rounded-lg px-1 py-1 hover:bg-indigo-500/10 transition-colors cursor-pointer',
+        attrs: { type: 'button', title: 'Tap to insert this result and keep calculating' },
+        onClick: () => { state.insertValue(entry.result); ensureCalcMode(); flash(card); close(); },
+      }, [
+        el('span', { className: 'text-lg font-semibold text-indigo-300 truncate', text: entry.result }),
+        el('span', {
+          className: 'shrink-0 inline-flex items-center gap-1 text-[10px] font-medium ' +
+            'text-indigo-300 bg-indigo-500/15 rounded-full px-2 py-0.5 ' +
+            'opacity-80 group-hover:opacity-100 group-hover:bg-indigo-500/25 transition',
+          html: 'Tap to reuse &rarr;',
+        }),
+      ]);
 
       const del = el('button', {
-        className: 'shrink-0 text-slate-500 hover:text-rose-400 transition-colors px-1',
+        className: 'absolute top-2 right-1.5 text-slate-500 hover:text-rose-400 transition-colors px-1 leading-none',
         html: '&times;',
         attrs: { type: 'button', 'aria-label': 'Delete entry' },
         onClick: () => history.remove(entry.id),
       });
 
-      card.appendChild(main);
+      card.appendChild(exprBtn);
+      card.appendChild(resBtn);
       card.appendChild(del);
       listEl.appendChild(card);
     });
