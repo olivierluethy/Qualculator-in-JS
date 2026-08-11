@@ -10,6 +10,7 @@ import { mountScientific } from './modes/scientific.js';
 import { mountFormula } from './modes/formula.js';
 import { mountPhysics } from './modes/physics.js';
 import { mountVectors } from './modes/vectors.js';
+import { mountGraph } from './modes/graph.js';
 
 // Mode registry. needsDisplay = uses the shared expression display at the top.
 const MODES = [
@@ -18,6 +19,7 @@ const MODES = [
   { id: 'formula', label: 'Formula', mount: mountFormula, needsDisplay: true },
   { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false },
   { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false },
+  { id: 'graph', label: 'Graph', mount: mountGraph, needsDisplay: false },
 ];
 
 let activeMode = 'standard';

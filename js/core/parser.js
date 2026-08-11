@@ -76,7 +76,7 @@ const UNARY_MINUS_PREC = 4; // binds looser than ^, so -3^2 = -(3^2)
 // Produces tokens: {type:'num', value}, {type:'op', value}, {type:'func', value},
 // {type:'const', value}, {type:'lparen'}, {type:'rparen'}, {type:'comma'},
 // {type:'bang'} (postfix factorial).
-function tokenize(input) {
+function tokenize(input, allowedVars = new Set()) {
   const tokens = [];
   let i = 0;
   const isDigit = (c) => c >= '0' && c <= '9';
@@ -112,7 +112,10 @@ function tokenize(input) {
       while (i < input.length && /[a-zA-Z0-9π]/.test(input[i])) name += input[i++];
       const lower = name.toLowerCase();
       if (lower in FUNCTIONS) tokens.push({ type: 'func', value: lower });
-      else if (name in CONSTANTS || lower in CONSTANTS) {
+      else if (allowedVars.has(name) || allowedVars.has(lower)) {
+        // a plotting variable (e.g. x, y) — resolved at eval time
+        tokens.push({ type: 'var', name: allowedVars.has(name) ? name : lower });
+      } else if (name in CONSTANTS || lower in CONSTANTS) {
         tokens.push({ type: 'const', value: (name in CONSTANTS ? CONSTANTS[name] : CONSTANTS[lower]) });
       } else throw new CalcError(`Unknown name: ${name}`);
       continue;
@@ -140,6 +143,7 @@ function toRPN(tokens) {
     switch (tok.type) {
       case 'num':
       case 'const':
+      case 'var':
         output.push(tok);
         break;
       case 'func':
@@ -201,11 +205,15 @@ function toRPN(tokens) {
 
 // ---- Evaluate RPN ----------------------------------------------------------
 
-function evalRPN(rpn, angleMode) {
+function evalRPN(rpn, angleMode, variables = {}) {
   const stack = [];
   for (const tok of rpn) {
     if (tok.type === 'num' || tok.type === 'const') {
       stack.push(tok.value);
+    } else if (tok.type === 'var') {
+      const v = variables[tok.name];
+      if (typeof v !== 'number' || Number.isNaN(v)) throw new CalcError(`Unknown variable: ${tok.name}`);
+      stack.push(v);
     } else if (tok.type === 'uop') {
       if (stack.length < 1) throw new CalcError('Invalid expression');
       stack.push(-stack.pop());
@@ -226,15 +234,40 @@ function evalRPN(rpn, angleMode) {
 }
 
 // Public API. Returns { ok:true, value } or { ok:false, error }.
+// opts.variables: optional map like { x: 2 } for expressions containing variables.
 export function evaluate(expression, opts = {}) {
   const angleMode = opts.angleMode || 'rad';
+  const variables = opts.variables || {};
   try {
     const trimmed = String(expression).trim();
     if (trimmed === '') return { ok: false, error: '' }; // empty is not an error, just nothing
-    const value = evalRPN(toRPN(tokenize(trimmed)), angleMode);
+    const value = evalRPN(toRPN(tokenize(trimmed, new Set(Object.keys(variables)))), angleMode, variables);
     return { ok: true, value };
   } catch (err) {
     if (err instanceof CalcError) return { ok: false, error: err.message };
     return { ok: false, error: 'Invalid expression' };
   }
+}
+
+// Compile an expression once for fast repeated evaluation while plotting.
+// varNames lists the variables the expression may use, e.g. ['x'] or ['x','y'].
+// Returns { ok:false, error } on a parse error, otherwise
+// { ok:true, eval(variables, angleMode) -> { ok, value|error } }.
+export function compile(expression, varNames = []) {
+  let rpn;
+  try {
+    rpn = toRPN(tokenize(String(expression), new Set(varNames)));
+  } catch (err) {
+    return { ok: false, error: err instanceof CalcError ? err.message : 'Invalid expression' };
+  }
+  return {
+    ok: true,
+    eval(variables = {}, angleMode = 'rad') {
+      try {
+        return { ok: true, value: evalRPN(rpn, angleMode, variables) };
+      } catch (err) {
+        return { ok: false, error: err instanceof CalcError ? err.message : 'Invalid expression' };
+      }
+    },
+  };
 }
