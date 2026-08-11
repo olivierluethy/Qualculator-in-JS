@@ -10,7 +10,7 @@ import * as history from '../core/history.js';
 
 const PALETTE = ['#818cf8', '#34d399', '#f472b6', '#fbbf24', '#22d3ee', '#f87171', '#a78bfa'];
 
-export function mountGraph(container) {
+export function mountGraph(controls, viz) {
   // --- view state (world units) ---
   let cx = 0, cy = 0;       // world coordinate at canvas center
   let scale = 40;           // pixels per world unit
@@ -20,6 +20,7 @@ export function mountGraph(container) {
 
   const objects = []; // { id, type, label, color, visible, ...compiled data }
   let idc = 0;
+  let preview = null; // tentative object being typed (drawn dashed, not committed)
 
   // --- coordinate transforms ---
   const sx = (wx) => W / 2 + (wx - cx) * scale;
@@ -55,10 +56,12 @@ export function mountGraph(container) {
   function draw() {
     ctx.clearRect(0, 0, W, H);
     drawGrid();
+    // committed objects plus the live (dashed) preview of what's being typed
+    const all = preview ? objects.concat([preview]) : objects;
     // fields drawn first (background), then curves/lines, then points
-    for (const o of objects) if (o.visible && (o.type === 'sfield' || o.type === 'vfield')) drawField(o);
-    for (const o of objects) if (o.visible && (o.type === 'function' || o.type === 'vline')) drawCurve(o);
-    for (const o of objects) if (o.visible && o.type === 'point') drawPoint(o);
+    for (const o of all) if (o.visible && (o.type === 'sfield' || o.type === 'vfield')) drawField(o);
+    for (const o of all) if (o.visible && (o.type === 'function' || o.type === 'vline')) drawCurve(o);
+    for (const o of all) if (o.visible && o.type === 'point') drawPoint(o);
   }
 
   function drawGrid() {
@@ -92,11 +95,14 @@ export function mountGraph(container) {
 
   // Plot y = f(x) across screen columns, breaking the path at discontinuities.
   function drawCurve(o) {
+    ctx.save();
     ctx.strokeStyle = o.color;
     ctx.lineWidth = 2;
+    if (o.preview) { ctx.setLineDash([6, 5]); ctx.globalAlpha = 0.9; }
     if (o.type === 'vline') {
       const px = sx(o.c);
       ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+      ctx.restore();
       return;
     }
     ctx.beginPath();
@@ -111,20 +117,26 @@ export function mountGraph(container) {
       prevY = py;
     }
     ctx.stroke();
+    ctx.restore();
   }
 
   function drawPoint(o) {
     const px = sx(o.x), py = sy(o.y);
+    ctx.save();
+    if (o.preview) ctx.globalAlpha = 0.9;
     ctx.fillStyle = o.color;
     ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '11px system-ui, sans-serif';
     ctx.fillText(`(${trimLabel(o.x)}, ${trimLabel(o.y)})`, px + 7, py - 6);
+    ctx.restore();
   }
 
   // Vector field: arrows of (P,Q). Slope field: short segments of slope f(x,y).
   function drawField(o) {
     const gap = 34; // px between samples
+    ctx.save();
+    if (o.preview) ctx.globalAlpha = 0.85;
     ctx.strokeStyle = o.color;
     ctx.fillStyle = o.color;
     ctx.lineWidth = 1.3;
@@ -149,6 +161,7 @@ export function mountGraph(container) {
         }
       }
     }
+    ctx.restore();
   }
 
   function seg(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
@@ -207,51 +220,59 @@ export function mountGraph(container) {
     return out.map((s) => s.trim());
   }
 
-  function addObject(type, rawInput) {
+  // Parse raw input into a drawable object (without id/color/visible), or return
+  // an error. Shared by "Add" (commits it) and the live preview (draws it only).
+  const TYPE_WORD = { function: 'function', vline: 'line', point: 'point', vfield: 'vector field', sfield: 'slope field' };
+  function parseObject(type, rawInput) {
     const raw = String(rawInput).trim();
-    if (raw === '') { setMsg('Enter an expression first.', true); return; }
-    const color = PALETTE[colorIdx++ % PALETTE.length];
-    const id = ++idc;
-    let obj, histResult;
-
+    if (raw === '') return { ok: false, empty: true };
     if (type === 'function') {
       const expr = raw.replace(/^y\s*=/, '').replace(/^f\s*\(\s*x\s*\)\s*=/, '').trim();
       const fn = compile(expr, ['x']);
-      if (!fn.ok) { colorIdx--; return setMsg(`Function error: ${fn.error}`, true); }
-      obj = { id, type, color, visible: true, label: `y = ${expr}`, fn };
-      histResult = 'function';
-    } else if (type === 'vline') {
-      const expr = raw.replace(/^x\s*=/, '').trim();
-      const r = evaluate(expr);
-      if (!r.ok) { colorIdx--; return setMsg(`Line error: ${r.error || 'need x = c'}`, true); }
-      obj = { id, type, color, visible: true, label: `x = ${formatNumber(r.value)}`, c: r.value };
-      histResult = 'line';
-    } else if (type === 'point') {
-      const parts = splitTopComma(raw.replace(/^\(/, '').replace(/\)$/, ''));
-      if (parts.length !== 2) { colorIdx--; return setMsg('Point needs (x, y).', true); }
-      const a = evaluate(parts[0]), b = evaluate(parts[1]);
-      if (!a.ok || !b.ok) { colorIdx--; return setMsg('Point coordinates invalid.', true); }
-      obj = { id, type, color, visible: true, label: `(${formatNumber(a.value)}, ${formatNumber(b.value)})`, x: a.value, y: b.value };
-      histResult = 'point';
-    } else if (type === 'vfield') {
-      const parts = splitTopComma(raw.replace(/^\(/, '').replace(/\)$/, ''));
-      if (parts.length !== 2) { colorIdx--; return setMsg('Vector field needs (P, Q).', true); }
-      const p = compile(parts[0], ['x', 'y']), q = compile(parts[1], ['x', 'y']);
-      if (!p.ok || !q.ok) { colorIdx--; return setMsg(`Field error: ${(p.error || q.error)}`, true); }
-      obj = { id, type, color, visible: true, label: `F = (${parts[0]}, ${parts[1]})`, p, q };
-      histResult = 'vector field';
-    } else { // sfield
-      const fn = compile(raw, ['x', 'y']);
-      if (!fn.ok) { colorIdx--; return setMsg(`Field error: ${fn.error}`, true); }
-      obj = { id, type, color, visible: true, label: `y' = ${raw}`, fn };
-      histResult = 'slope field';
+      if (!fn.ok) return { ok: false, error: `Function error: ${fn.error}` };
+      return { ok: true, obj: { type, label: `y = ${expr}`, fn } };
     }
+    if (type === 'vline') {
+      const r = evaluate(raw.replace(/^x\s*=/, '').trim());
+      if (!r.ok) return { ok: false, error: `Line error: ${r.error || 'need x = c'}` };
+      return { ok: true, obj: { type, label: `x = ${formatNumber(r.value)}`, c: r.value } };
+    }
+    if (type === 'point') {
+      const parts = splitTopComma(raw.replace(/^\(/, '').replace(/\)$/, ''));
+      if (parts.length !== 2) return { ok: false, error: 'Point needs (x, y).' };
+      const a = evaluate(parts[0]), b = evaluate(parts[1]);
+      if (!a.ok || !b.ok) return { ok: false, error: 'Point coordinates invalid.' };
+      return { ok: true, obj: { type, label: `(${formatNumber(a.value)}, ${formatNumber(b.value)})`, x: a.value, y: b.value } };
+    }
+    if (type === 'vfield') {
+      const parts = splitTopComma(raw.replace(/^\(/, '').replace(/\)$/, ''));
+      if (parts.length !== 2) return { ok: false, error: 'Vector field needs (P, Q).' };
+      const p = compile(parts[0], ['x', 'y']), q = compile(parts[1], ['x', 'y']);
+      if (!p.ok || !q.ok) return { ok: false, error: `Field error: ${(p.error || q.error)}` };
+      return { ok: true, obj: { type, label: `F = (${parts[0]}, ${parts[1]})`, p, q } };
+    }
+    const fn = compile(raw, ['x', 'y']); // sfield
+    if (!fn.ok) return { ok: false, error: `Field error: ${fn.error}` };
+    return { ok: true, obj: { type, label: `y' = ${raw}`, fn } };
+  }
 
+  function addObject(type, rawInput) {
+    const parsed = parseObject(type, rawInput);
+    if (!parsed.ok) { setMsg(parsed.empty ? 'Enter an expression first.' : parsed.error, true); return; }
+    const obj = Object.assign({ id: ++idc, color: PALETTE[colorIdx++ % PALETTE.length], visible: true }, parsed.obj);
     objects.push(obj);
-    history.add(obj.label, histResult, { mode: 'graph' });
+    history.add(obj.label, TYPE_WORD[type], { mode: 'graph' });
+    preview = null;      // it's committed now; drop the tentative preview
     renderList();
     draw();
     setMsg(`Added: ${obj.label}`);
+  }
+
+  // Live preview: redraw the object being typed (dashed) before it's added.
+  function updatePreview() {
+    const parsed = parseObject(typeSelect.value, input.value);
+    preview = parsed.ok ? Object.assign({ visible: true, preview: true, color: '#94a3b8' }, parsed.obj) : null;
+    draw();
   }
 
   // --- controls UI ---
@@ -272,13 +293,14 @@ export function mountGraph(container) {
     className: 'flex-1 min-w-0 bg-slate-800 text-slate-100 rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-indigo-400 font-mono text-sm',
     attrs: { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: PLACEHOLDERS.function, 'aria-label': 'Graph expression' },
   });
-  typeSelect.addEventListener('change', () => { input.placeholder = PLACEHOLDERS[typeSelect.value]; input.focus(); });
+  typeSelect.addEventListener('change', () => { input.placeholder = PLACEHOLDERS[typeSelect.value]; input.focus(); updatePreview(); });
   const addBtn = el('button', {
     className: 'shrink-0 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-sm font-medium transition-colors active:scale-95',
     text: 'Add', attrs: { type: 'button' },
     onClick: () => { addObject(typeSelect.value, input.value); input.value = ''; input.focus(); },
   });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); } });
+  input.addEventListener('input', updatePreview); // plot the curve live as it's typed
 
   const listEl = el('div', { className: 'space-y-1.5 mt-3' });
   const msg = el('div', { className: 'mt-2 text-xs text-slate-400 min-h-[1rem]' });
@@ -328,12 +350,17 @@ export function mountGraph(container) {
     pointToggle,
   ]);
 
-  // --- assemble ---
-  container.appendChild(canvas);
-  container.appendChild(toolbar);
-  container.appendChild(el('div', { className: 'flex gap-2 mt-3' }, [typeSelect, input, addBtn]));
-  container.appendChild(msg);
-  container.appendChild(listEl);
+  // --- assemble: plane on the right, controls on the left ---
+  viz.appendChild(el('div', {
+    className: 'rounded-2xl bg-slate-900 border border-slate-700 p-3 sm:p-4',
+  }, [
+    el('p', { className: 'text-xs font-medium text-slate-400 mb-1', text: 'Graphing plane — drag to pan, scroll to zoom' }),
+    canvas,
+  ]));
+  controls.appendChild(el('div', { className: 'flex gap-2' }, [typeSelect, input, addBtn]));
+  controls.appendChild(msg);
+  controls.appendChild(toolbar);
+  controls.appendChild(listEl);
 
   renderList();
   // size the canvas once laid out, and keep it responsive

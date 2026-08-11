@@ -28,7 +28,7 @@
 
 <body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
 
-    <div class="mx-auto max-w-md px-4 py-6 sm:py-10">
+    <div class="mx-auto max-w-5xl px-4 py-6 sm:py-10">
 
         <!-- Header -->
         <header class="flex items-center justify-between mb-5">
@@ -45,7 +45,7 @@
         <main class="rounded-2xl bg-slate-900 border border-slate-800 shadow-xl p-4 sm:p-5">
 
             <!-- Shared display: full expression + live preview -->
-            <div id="display" class="rounded-xl bg-slate-800/40 border border-slate-800 p-4 mb-4">
+            <div id="display" class="rounded-xl bg-slate-800/40 border border-slate-800 p-4 mb-4 max-w-xl mx-auto w-full">
                 <div class="flex justify-end mb-1">
                     <span id="angle"
                         class="text-[10px] font-semibold tracking-wider text-slate-400 bg-slate-800 rounded px-1.5 py-0.5">DEG</span>
@@ -58,9 +58,9 @@
                 <div id="preview" class="text-right text-lg h-7 overflow-hidden text-slate-400"></div>
             </div>
 
-            <!-- Mode tabs -->
+            <!-- Mode tabs: even grid that never overlaps; wraps 2 -> 4 -> 7 across -->
             <div id="tabs" role="tablist"
-                class="flex flex-wrap gap-2 mb-4"></div>
+                class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-5"></div>
 
             <!-- Mode panels (mounted by JS) -->
             <div id="panels"></div>

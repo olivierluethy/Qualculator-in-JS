@@ -8,6 +8,9 @@ import { el } from '../core/dom.js';
 import { formatNumber } from '../core/format.js';
 import { evaluate } from '../core/parser.js';
 import * as history from '../core/history.js';
+import { drawGeometryFigure } from './geometry-figures.js';
+
+const SVGNS = 'http://www.w3.org/2000/svg';
 
 const TAU = Math.PI * 2;
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -166,9 +169,31 @@ export const CALCS = [
   },
 ];
 
-export function mountGeometry(container) {
+export function mountGeometry(container, viz) {
   let current = CALCS[0];
   const fieldEls = {}; // key -> input element
+  const menuItems = {}; // calc id -> menu <button>, for the active highlight
+
+  // --- live figure (right column) ---
+  const figure = document.createElementNS(SVGNS, 'svg');
+  figure.setAttribute('viewBox', '0 0 320 320');
+  figure.setAttribute('class', 'w-full h-auto max-w-sm mx-auto lg:max-w-none block');
+  figure.setAttribute('aria-label', 'Live figure of the selected shape');
+
+  // Lenient snapshot of what's typed right now (empty fields are skipped).
+  function currentValues() {
+    const values = {};
+    current.inputs.forEach((f) => {
+      const raw = fieldEls[f.key] ? fieldEls[f.key].value.trim() : '';
+      if (raw === '') return;
+      const r = evaluate(raw);
+      if (r.ok) values[f.key] = r.value;
+    });
+    return values;
+  }
+  function updateFigure(final = false) {
+    drawGeometryFigure(figure, current.id, currentValues(), final);
+  }
 
   // --- custom picker (dropdown with a diagram per entry) ---
   const picker = el('div', { className: 'relative' });
@@ -184,11 +209,13 @@ export function mountGeometry(container) {
     attrs: { role: 'listbox' },
   });
   CALCS.forEach((c) => {
-    menu.appendChild(el('button', {
-      className: 'w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-700 transition-colors',
+    const item = el('button', {
+      className: menuItemClass(false),
       attrs: { type: 'button', role: 'option' },
       onClick: () => selectCalc(c),
-    }, [geoIcon(c.icon, 38), el('span', { className: 'text-sm truncate', text: c.name })]));
+    }, [geoIcon(c.icon, 38), el('span', { className: 'text-sm truncate', text: c.name })]);
+    menuItems[c.id] = item;
+    menu.appendChild(item);
   });
   picker.appendChild(pickerBtn);
   picker.appendChild(menu);
@@ -200,8 +227,10 @@ export function mountGeometry(container) {
     pbIcon.innerHTML = '';
     pbIcon.appendChild(geoIcon(current.icon, 30));
     pbLabel.textContent = current.name;
+    // mark the selected shape as active in the dropdown
+    CALCS.forEach((c) => { if (menuItems[c.id]) menuItems[c.id].className = menuItemClass(c.id === current.id); });
   }
-  function selectCalc(c) { current = c; setPicker(); buildForm(); menu.classList.add('hidden'); }
+  function selectCalc(c) { current = c; setPicker(); buildForm(); updateFigure(); menu.classList.add('hidden'); }
 
   // --- form + results ---
   const hint = el('p', { className: 'text-xs text-slate-400 mt-2' });
@@ -225,6 +254,7 @@ export function mountGeometry(container) {
         attrs: { type: 'text', inputmode: 'decimal', autocomplete: 'off', spellcheck: 'false', 'aria-label': f.label },
       });
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); run(); } });
+      input.addEventListener('input', () => updateFigure(false)); // redraw as you type
       fieldEls[f.key] = input;
       const unit = f.unit ? ` <span class="text-slate-500">(${f.unit})</span>` : '';
       form.appendChild(el('label', { className: 'block' }, [
@@ -258,6 +288,7 @@ export function mountGeometry(container) {
     catch (msg) { return showError(typeof msg === 'string' ? msg : 'Invalid input.'); }
 
     renderRows(rows);
+    updateFigure(true); // draw the finished figure with computed values
     // Push a concise summary to history.
     const primary = rows.find((r) => typeof r[1] === 'number');
     if (primary) {
@@ -288,6 +319,26 @@ export function mountGeometry(container) {
   container.appendChild(form);
   container.appendChild(calcBtn);
   container.appendChild(result);
+
+  // Right column: the live figure.
+  if (viz) {
+    viz.appendChild(el('div', {
+      className: 'rounded-2xl bg-slate-900 border border-slate-700 p-3 sm:p-4',
+    }, [
+      el('p', { className: 'text-xs font-medium text-slate-400 mb-1', text: 'Live figure' }),
+      figure,
+    ]));
+  }
+
   setPicker();
   buildForm();
+  updateFigure();
+}
+
+// A dropdown option: highlighted (indigo) when it is the selected shape.
+function menuItemClass(active) {
+  return (
+    'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ' +
+    (active ? 'bg-indigo-600/25 text-white ring-1 ring-inset ring-indigo-500/50' : 'hover:bg-slate-700')
+  );
 }

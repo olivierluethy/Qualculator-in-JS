@@ -4,8 +4,9 @@
 
 import { keyButton, el } from '../core/dom.js';
 import * as state from '../core/state.js';
+import { mountResultCard } from '../core/result-card.js';
 
-export function mountStandard(container) {
+export function mountStandard(container, viz) {
   const grid = el('div', { className: 'grid grid-cols-4 gap-2 sm:gap-3' });
 
   const add = (t, k) => state.append(t, k);
@@ -42,4 +43,5 @@ export function mountStandard(container) {
   grid.appendChild(equals);
 
   container.appendChild(grid);
+  mountResultCard(viz);
 }

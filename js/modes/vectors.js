@@ -31,14 +31,14 @@ function svgEl(tag, attrs = {}) {
   return node;
 }
 
-export function mountVectors(container) {
+export function mountVectors(controls, viz) {
   let inputs = {}; // 'Ax','Ay','Bx','By' -> input elements
   let readout;
 
   // ---- SVG plane -------------------------------------------------------
   const svg = svgEl('svg', {
     viewBox: '0 0 400 400',
-    class: 'w-full max-w-md mx-auto touch-none select-none rounded-xl bg-slate-900 border border-slate-700',
+    class: 'w-full max-w-md mx-auto lg:max-w-none touch-none select-none rounded-xl bg-slate-900 border border-slate-700 block',
     'aria-label': '2D vector plane',
   });
   // arrowhead marker
@@ -166,44 +166,69 @@ export function mountVectors(container) {
     attrs: { type: 'text', inputmode: 'decimal', 'aria-label': 'scalar k' }, value: '2',
   });
 
+  // Operation buttons: the last-used one stays visibly highlighted as active.
+  const opButtons = [];
+  const setActiveOp = (btn) => opButtons.forEach((b) => { b.className = opClass(b === btn); });
   const opGrid = el('div', { className: 'grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3' });
-  ops.forEach(([label, fn]) => opGrid.appendChild(el('button', {
-    className: 'h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-200 text-sm font-medium transition-colors active:scale-95',
-    text: label, attrs: { type: 'button' }, onClick: fn,
-  })));
+  ops.forEach(([label, fn]) => {
+    const b = el('button', {
+      className: opClass(false), text: label, attrs: { type: 'button' },
+      onClick: () => { setActiveOp(b); fn(); },
+    });
+    opButtons.push(b);
+    opGrid.appendChild(b);
+  });
 
   // scalar multiply row (uses the scalar input)
+  const kaBtn = el('button', {
+    className: opClass(false),
+    text: 'k · A', attrs: { type: 'button' },
+    onClick: () => {
+      const k = Number(scalarInput.value);
+      if (!Number.isFinite(k)) { readout.textContent = 'k must be a number.'; return; }
+      setActiveOp(kaBtn);
+      result = { x: k * A.x, y: k * A.y }; redraw();
+      show(`${formatNumber(k)} · A`, formatVector(result));
+    },
+  });
+  opButtons.push(kaBtn);
   const scalarRow = el('div', { className: 'flex items-center gap-2 mt-2' }, [
     el('span', { className: 'text-sm text-slate-300', text: 'k =' }),
     scalarInput,
-    el('button', {
-      className: 'h-11 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-200 text-sm font-medium transition-colors active:scale-95',
-      text: 'k · A', attrs: { type: 'button' },
-      onClick: () => {
-        const k = Number(scalarInput.value);
-        if (!Number.isFinite(k)) { readout.textContent = 'k must be a number.'; return; }
-        result = { x: k * A.x, y: k * A.y }; redraw();
-        show(`${formatNumber(k)} · A`, formatVector(result));
-      },
-    }),
+    kaBtn,
     el('button', {
       className: 'h-11 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors ml-auto',
       text: 'Clear R', attrs: { type: 'button' },
-      onClick: () => { result = null; redraw(); readout.textContent = 'Resultant cleared.'; },
+      onClick: () => { result = null; setActiveOp(null); redraw(); readout.textContent = 'Resultant cleared.'; },
     }),
   ]);
 
-  // ---- assemble --------------------------------------------------------
-  container.appendChild(svg);
-  container.appendChild(el('div', { className: 'flex flex-wrap gap-4 mt-3' }, [
+  // ---- assemble: plane on the right, controls on the left -------------
+  viz.appendChild(el('div', {
+    className: 'rounded-2xl bg-slate-900 border border-slate-700 p-3 sm:p-4',
+  }, [
+    el('p', { className: 'text-xs font-medium text-slate-400 mb-1', text: 'Vector plane — drag the arrow tips' }),
+    svg,
+  ]));
+  controls.appendChild(el('div', { className: 'flex flex-wrap gap-4' }, [
     vecInputs(A, 'text-indigo-400'),
     vecInputs(B, 'text-emerald-400'),
   ]));
-  container.appendChild(opGrid);
-  container.appendChild(scalarRow);
-  container.appendChild(readout);
+  controls.appendChild(opGrid);
+  controls.appendChild(scalarRow);
+  controls.appendChild(readout);
 
   redraw();
+}
+
+// An operation button: highlighted (indigo) when it is the active operation.
+function opClass(active) {
+  return (
+    'h-11 px-4 rounded-xl text-sm font-medium transition-colors active:scale-95 ' +
+    (active
+      ? 'bg-indigo-600 text-white ring-1 ring-indigo-400/50'
+      : 'bg-slate-800 hover:bg-slate-700 text-indigo-200')
+  );
 }
 
 // Draw grid lines, axes, ticks and labels once.

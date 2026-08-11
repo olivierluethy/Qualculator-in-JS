@@ -4,10 +4,11 @@
 
 import { keyButton, el } from '../core/dom.js';
 import * as state from '../core/state.js';
+import { mountResultCard } from '../core/result-card.js';
 
 let angleButton; // reference so we can refresh its label when the mode toggles
 
-export function mountScientific(container) {
+export function mountScientific(container, viz) {
   const add = (t, k = 'raw') => state.append(t, k);
 
   // --- Scientific function panel (deg/rad + functions) ---
@@ -71,6 +72,7 @@ export function mountScientific(container) {
   numeric.forEach((b) => grid.appendChild(b));
   grid.appendChild(keyButton('=', () => state.evaluateNow(), 'accent', 'col-span-4 mt-1'));
   container.appendChild(grid);
+  mountResultCard(viz);
 }
 
 function angleLabel() { return state.getAngleMode().toUpperCase(); } // DEG / RAD

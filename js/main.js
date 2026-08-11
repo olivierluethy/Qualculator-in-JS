@@ -14,15 +14,19 @@ import { mountVectors } from './modes/vectors.js';
 import { mountGraph } from './modes/graph.js';
 import { mountGeometry } from './modes/geometry.js';
 
-// Mode registry. needsDisplay = uses the shared expression display at the top.
+// Mode registry.
+//  needsDisplay = uses the shared expression display at the top.
+//  twoCol       = renders a controls | live-visualization two-column layout on
+//                 desktop (stacks on mobile). Pure keypad modes stay a single
+//                 centered column, which is the natural shape for a calculator.
 const MODES = [
-  { id: 'standard', label: 'Standard', mount: mountStandard, needsDisplay: true },
-  { id: 'scientific', label: 'Scientific', mount: mountScientific, needsDisplay: true },
-  { id: 'formula', label: 'Formula', mount: mountFormula, needsDisplay: true },
-  { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false },
-  { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false },
-  { id: 'graph', label: 'Graph', mount: mountGraph, needsDisplay: false },
-  { id: 'geometry', label: 'Geometry', mount: mountGeometry, needsDisplay: false },
+  { id: 'standard', label: 'Standard', mount: mountStandard, needsDisplay: true, twoCol: true },
+  { id: 'scientific', label: 'Scientific', mount: mountScientific, needsDisplay: true, twoCol: true },
+  { id: 'formula', label: 'Formula', mount: mountFormula, needsDisplay: true, twoCol: true },
+  { id: 'physics', label: 'Physics', mount: mountPhysics, needsDisplay: false, twoCol: true },
+  { id: 'vectors', label: 'Vectors', mount: mountVectors, needsDisplay: false, twoCol: true },
+  { id: 'graph', label: 'Graph', mount: mountGraph, needsDisplay: false, twoCol: true },
+  { id: 'geometry', label: 'Geometry', mount: mountGeometry, needsDisplay: false, twoCol: true },
 ];
 
 let activeMode = 'standard';
@@ -45,7 +49,21 @@ function boot() {
     tabsEl.appendChild(tab);
 
     const panel = el('div', { className: idx === 0 ? '' : 'hidden' });
-    mode.mount(panel);           // mount the mode's UI once
+    if (mode.twoCol) {
+      // controls | large live visualization; collapses to a single stacked
+      // column on mobile (controls first, visualization below).
+      const controls = el('div', { className: 'min-w-0' });
+      const viz = el('div', { className: 'min-w-0 mt-4 lg:mt-0' });
+      panel.appendChild(el('div', {
+        className: 'lg:grid lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-6 lg:items-start',
+      }, [controls, viz]));
+      mode.mount(controls, viz);
+    } else {
+      // pure keypad modes: a single centered column
+      const controls = el('div', { className: 'max-w-md mx-auto' });
+      panel.appendChild(controls);
+      mode.mount(controls);
+    }
     panels[mode.id] = panel;
     panelsEl.appendChild(panel);
   });
@@ -200,10 +218,11 @@ function ensureCalcMode() {
 // ---- tailwind class helpers ----
 function tabClass(active) {
   return (
-    'inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ' +
+    'w-full inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg ' +
+    'text-sm font-medium whitespace-nowrap transition-colors ' +
     (active
-      ? 'bg-indigo-600 text-white'
-      : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
+      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-indigo-400/50'
+      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white')
   );
 }
 function previewClass(isError) {
