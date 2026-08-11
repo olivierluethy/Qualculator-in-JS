@@ -1,47 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style/style.css">
     <link rel="shortcut icon" href="assets/favicon.ico">
-
-    <!-- To import font from google fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600&display=swap" rel="stylesheet">
     <title>Qualculator</title>
+
+    <!-- Tailwind CSS via Play CDN: all styling is done with utility classes;
+         no hand-written CSS files exist in this project. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Register a small utility (hide horizontal scrollbars) through Tailwind's
+        // config so styling stays entirely inside Tailwind — no separate CSS file.
+        tailwind.config = {
+            plugins: [
+                function ({ addUtilities }) {
+                    addUtilities({
+                        '.no-scrollbar::-webkit-scrollbar': { display: 'none' },
+                        '.no-scrollbar': { '-ms-overflow-style': 'none', 'scrollbar-width': 'none' },
+                    });
+                },
+            ],
+        };
+    </script>
 </head>
 
-<body>
-    <h1>Qualculator</h1>
+<body class="min-h-screen bg-slate-950 text-slate-100 antialiased">
 
-    <div class="grid-container">
-        <input type="text" id="input" value="0" readonly>
-        <button title="c" class="grid-item" onclick="clearNum()">c</button>
-        <button title="/" class="grid-item" onclick="display_divide('/')">/</button>
-        <button title="%" class="grid-item" onclick="display_modulo('%')">%</button>
-        <button title="&larr;" class="grid-item" onclick="clearLastNumber()">&larr;</button>
-        <button title="7" class="grid-item" onclick="display(7)">7</button>
-        <button title="8" class="grid-item" onclick="display(8)">8</button>
-        <button title="9" class="grid-item" onclick="display(9)">9</button>
-        <button title="*" class="grid-item" onclick="display_multi('*')">*</button>
-        <button title="4" class="grid-item" onclick="display(4)">4</button>
-        <button title="5" class="grid-item" onclick="display(5)">5</button>
-        <button title="6" class="grid-item" onclick="display(6)">6</button>
-        <button title="-" class="grid-item" onclick="display_sub('-')">-</button>
-        <button title="1" class="grid-item" onclick="display(1)">1</button>
-        <button title="2" class="grid-item" onclick="display(2)">2</button>
-        <button title="3" class="grid-item" onclick="display(3)">3</button>
-        <button title="+" class="grid-item" onclick="display_add('+')">+</button>
-        <button title="0" class="grid-item zero" onclick="display(0)">0</button>
-        <button title="." class="grid-item" onclick="display('.')">.</button>
-        <button title="=" class="grid-item" onclick="solve()">=</button>
+    <div class="mx-auto max-w-md px-4 py-6 sm:py-10">
+
+        <!-- Header -->
+        <header class="flex items-center justify-between mb-5">
+            <h1 class="text-2xl font-bold tracking-tight">
+                Qual<span class="text-indigo-400">culator</span>
+            </h1>
+            <button id="history-toggle" type="button"
+                class="flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2 text-sm text-slate-200 transition-colors">
+                <span aria-hidden="true">🕘</span> History
+            </button>
+        </header>
+
+        <!-- Calculator card -->
+        <main class="rounded-2xl bg-slate-900 border border-slate-800 shadow-xl p-4 sm:p-5">
+
+            <!-- Shared display: full expression + live preview -->
+            <div id="display" class="rounded-xl bg-slate-800/40 border border-slate-800 p-4 mb-4">
+                <div class="flex justify-end mb-1">
+                    <span id="angle"
+                        class="text-[10px] font-semibold tracking-wider text-slate-400 bg-slate-800 rounded px-1.5 py-0.5">DEG</span>
+                </div>
+                <!-- expression line: always shows the full running expression, incl. pending operator -->
+                <div id="expr"
+                    class="text-right text-3xl font-mono whitespace-nowrap overflow-x-auto no-scrollbar leading-tight">
+                    0</div>
+                <!-- live preview result -->
+                <div id="preview" class="text-right text-lg h-7 overflow-hidden text-slate-400"></div>
+            </div>
+
+            <!-- Mode tabs -->
+            <div id="tabs" role="tablist"
+                class="flex gap-2 overflow-x-auto no-scrollbar mb-4 pb-1"></div>
+
+            <!-- Mode panels (mounted by JS) -->
+            <div id="panels"></div>
+        </main>
+
+        <p class="text-center text-xs text-slate-600 mt-4">
+            Keyboard: digits, <span class="text-slate-500">+ − * / % ^ ( )</span>,
+            Enter = <span class="text-slate-500">=</span>, Backspace, Esc = clear.
+        </p>
     </div>
 
-    <script src="js/main.js"></script>
+    <!-- History drawer (slide-over) -->
+    <div id="history-overlay" class="hidden fixed inset-0 bg-black/50 z-40"></div>
+    <aside id="history-drawer"
+        class="fixed top-0 right-0 h-full w-80 max-w-[85vw] bg-slate-900 border-l border-slate-800 z-50 translate-x-full transition-transform duration-300 ease-out flex flex-col">
+        <div class="flex items-center justify-between p-4 border-b border-slate-800">
+            <h2 class="text-lg font-semibold">History</h2>
+            <div class="flex items-center gap-2">
+                <button id="history-clear" type="button"
+                    class="text-xs rounded-lg bg-slate-800 hover:bg-rose-900/70 px-2.5 py-1.5 text-slate-300 transition-colors">Clear
+                    all</button>
+                <button id="history-close" type="button"
+                    class="rounded-lg bg-slate-800 hover:bg-slate-700 w-8 h-8 text-slate-300 transition-colors"
+                    aria-label="Close history">&times;</button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+            <p id="history-empty" class="text-sm text-slate-500 text-center mt-8">
+                No calculations yet.<br>Results from every mode appear here.
+            </p>
+            <div id="history-list" class="space-y-2"></div>
+        </div>
+        <p class="text-[11px] text-slate-600 px-4 py-2 border-t border-slate-800">
+            Tap a <span class="text-indigo-400">result</span> to insert it, or an
+            <span class="text-slate-400">expression</span> to reload it.
+        </p>
+    </aside>
+
+    <script type="module" src="js/main.js"></script>
 </body>
 
 </html>
