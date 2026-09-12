@@ -1,4 +1,16 @@
-# Qualculator
+<div align="center">
+  <img src="assets/logo.png" alt="Qualculator logo" width="140" />
+  <h1>Qualculator</h1>
+  <p><b>A dark-mode scientific & engineering calculator that runs anywhere.</b><br/>Standard, scientific, formula, physics, vectors, graphing and geometry modes — built with HTML + Tailwind + vanilla ES modules, no framework and no build step.</p>
+  <p>
+    <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+    <img alt="JavaScript" src="https://img.shields.io/badge/JavaScript-ES%20Modules-F7DF1E?logo=javascript&logoColor=black">
+    <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-CSS-06B6D4?logo=tailwindcss&logoColor=white">
+    <img alt="HTML5" src="https://img.shields.io/badge/HTML5-markup-E34F26?logo=html5&logoColor=white">
+  </p>
+</div>
+
+---
 
 A clean, responsive, **dark-mode** scientific & engineering calculator that runs
 equally well on desktop and mobile. Built with **HTML + Tailwind CSS + vanilla
@@ -86,3 +98,13 @@ docs/superpowers/specs # design document
 
 - Dark theme only, by design.
 - No dependencies to install; math.js was intentionally **not** used (see above).
+
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Olivier Lüthy. You're free to use, modify and distribute this
+software, including commercially, as long as the copyright notice and license are included.
+
+## Author
+
+Built by **Olivier Lüthy** — [GitHub](https://github.com/olivierluethy).
